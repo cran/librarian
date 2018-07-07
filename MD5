@@ -1,0 +1,15 @@
+f6a9b09ad64699e90c94f20c93428bcf *DESCRIPTION
+4c8f1ce74aeed4fe49313ef83fd4e265 *NAMESPACE
+bfd52f06825d57710a81f3d4f2aa9b60 *NEWS.md
+98355031b30c73e9f71df77829981ce1 *R/package_tools.R
+e1e54fe7f728a0ce2fc387d99d3cc903 *R/private_funs.R
+1dee15983834946d44c8d514cd788cf7 *README.md
+8573d39e1361c549cc144e2732b928a1 *man/check_attached.Rd
+177393580173f4ece82bcc84be88ac42 *man/check_installed.Rd
+e565d2c6edb3d706f6522a42d393fa65 *man/lib_paths.Rd
+12f139c455947de6d8c959a0a247252a *man/make_dirs.Rd
+2382842e3e284997be480557d75c194a *man/nse_dots.Rd
+64b7341fc45236e9587451c6450534f4 *man/reshelf.Rd
+31812b8f52cb1ef3a0a6a5ca3b2763ba *man/shelf.Rd
+59a44a6c26630b50ef288f56f299c523 *man/suppress_lib_message.Rd
+8bb8cd7eaa3282b33f3900ac39839720 *man/unshelf.Rd
