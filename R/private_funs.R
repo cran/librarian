@@ -1,5 +1,5 @@
-# Internal functions for librarian.
 
+# Internal functions for Librarian ---------------------------------------------
 
 #' Non-standard evaluation of dots with base R
 #'
@@ -20,6 +20,7 @@
 nse_dots <- function(..., keep_user = FALSE) {
     dots <- eval(substitute(alist(...)))
     dots <- as.character(dots)
+    dots <- gsub("\\s", "", dots)
     
     if (keep_user == FALSE) {
         dots <- sub(".*?/", "", dots)
@@ -31,7 +32,36 @@ nse_dots <- function(..., keep_user = FALSE) {
 }
 
 
+
+#' Did the user pass arguments inside dots?
+#'
+#' @param ... (Dots)
+#'
+#' @return `TRUE` (dots is empty) or `FALSE` (dots is not empty).
+#'
+#' @examples
+#' \dontrun{
+#' is_dots_empty(package, names, here)
+#' 
+#' #> [1] FALSE  
+#' }
+#'
+#' @md
+is_dots_empty <- function(...) {
+    if (length(eval(substitute(alist(...)))) > 0) {
+        FALSE
+    } else {
+        TRUE
+    }
+}
+
+
+
 #' Check installed packages
+#'
+#' This function behaves differently to the publicly-exposed librarian functions; because
+#' it is meant to be used inside librarian functions, it takes package names as a 
+#' character vector instead of as bare names. That's why I don't export it.
 #'
 #' @param packages (NULL or Character) 
 #'
@@ -53,12 +83,13 @@ nse_dots <- function(..., keep_user = FALSE) {
 #' 
 #' @md
 check_installed <- function(packages = NULL) {
-    installed_pkgs <- rownames(utils::installed.packages())
-    
     if (is.null(packages)) {
-        return(installed_pkgs)
+        return(rownames(utils::installed.packages()))  # Very slow!
     } else {
-        status <- packages %in% installed_pkgs
+        found_pkgs <- find.package(packages, quiet = TRUE)
+        # Last directory of find.package() output is package folder.
+        found_pkg_names <- gsub("^.*?(/|\\\\)(.*?)$", "\\2", found_pkgs)
+        status <- packages %in% found_pkg_names
         names(status) <- packages
         
         return(status)
@@ -66,7 +97,12 @@ check_installed <- function(packages = NULL) {
 }
 
 
+
 #' Check attached packages
+#'
+#' This function behaves differently to the publicly-exposed librarian functions; because
+#' it is meant to be used inside librarian functions, it takes package names as a 
+#' character vector instead of as bare names. That's why I don't export it.
 #'
 #' @param packages (NULL or Character)
 #'
@@ -99,6 +135,8 @@ check_attached <- function(packages = NULL) {
         return(status)
     }
 }
+
+
 
 #' Build a path, creating subfolders if needed
 #'
@@ -153,9 +191,9 @@ make_dirs <- function(...) {
 
 #' Suppress "lib unspecified" message
 #' 
-#' This is used to suppress a specific warning message that is printed by install.packages
-#' and remove.packages, which is caused by the 'lib' arg not being assigned in the 
-#' function call. In particular, devtools::install_github() ultimately 
+#' This is used to suppress a specific warning message that is printed by install.packages()
+#' and remove.packages(), which is caused by the 'lib' arg not being assigned in the 
+#' function call.
 #'
 #' @param expr (Expression) A function call.
 #'
@@ -177,7 +215,126 @@ suppress_lib_message <- function(expr) {
 
 
 
-# Runs with devtools::release().
+#' Collapse a vector 
+#'
+#' I use this internally for turning a vector of package names into a string.
+#'
+#' @param ... (...) Vectors that will be concatenated and coerced to Character.
+#' @param wrap (Character) Placed at the left and right sides of each vector element.
+#' @param collapse (Character) Placed between each element of the original vector(s).
+#' @param unique (Logical) If `TRUE`, duplicate entries in `...` will be removed.
+#'
+#' @return A string.
+#'
+#' @examples
+#' \dontrun{
+#' collapse_vec(month.abb)
+#' #> [1] "'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'"
+#' }
+#' 
+#' @md
+collapse_vec <- function(..., wrap = "'", collapse = ", ", unique = TRUE) {
+    vec <- as.character(c(...))
+
+    if (unique == TRUE) {
+        vec <- unique(vec)
+    }
+
+    # vec is wrapped in empty strings so that 'sep' arg will wrap each entry.
+    paste(character(0), vec, character(0), collapse = collapse, sep = wrap)  
+}
+
+
+
+#' Turn a list of words into a fuzzy regex
+#' 
+#' A fuzzy regex is one that will match search terms in any order by using PERL 
+#' lookaround. This is very slow, but often worth the cost to get more complete
+#' results.
+#'
+#' @param vec (Character) A string containing space-separated keywords to search for.
+#'
+#' @return A string where each word has been wrapped as a lookaround term.
+#'
+#' @examples
+#' \dontrun{
+#' fuzzy_needle("network centrality")
+#' #> [1] "(?=.*network)(?=.*centrality)"
+#' }
+fuzzy_needle <- function(vec) {
+    words <- unique(unlist(strsplit(vec, "\\s+")))
+    
+    groups <- sapply(words, function(x) paste0("(?=.*", x, ")"), USE.NAMES = FALSE)
+    
+    paste0(groups, collapse = "")
+}
+
+
+
+#' Truncate and wrap long text for console printing
+#'
+#' @param ... (Vectors) Vectors that will be joined together.
+#' @param trim (Int) The maximum length that `char` will be truncated to.
+#' @param width (Int) The target maximum column number to wrap the text at.
+#' @param indent (Int) Indent the first line by this many spaces.
+#' @param exdent (Int) Indent subsequent lines by this many spaces.
+#' @param prefix (Char) Begin every line with this string.
+#' @param initial (Char) Begin the first line with this string.
+#'
+#' @return A character vector.
+#'
+#' @examples
+#' \dontrun{
+#' wrap_long("This is a pretty long line that will need to be wrapped to 30 chars.",
+#'           trim = 50, width = 30) -> wrapped_text
+#' 
+#' cat(wrapped_text)
+#' 
+#' #>    This is a pretty long 
+#' #>    line that will need to 
+#' #>    be wr[...]
+#' }
+#' 
+#' @md
+wrap_long <- function(..., trim = 200, width = 80, indent = 4, exdent = indent, 
+                      prefix = "\n", initial = "") {
+    char <- c(...)
+    short_str <- strtrim(char, width = trim)
+    
+    if (nchar(short_str) < nchar(char)) {
+        short_str <- paste0(short_str, "[...]")
+    }
+    
+    strwrap(short_str, width = width, indent = indent, exdent = exdent, 
+            prefix = prefix, initial = initial)
+}
+
+
+
+#' Assert that a URL is complete and valid
+#'
+#' @details The regex I use is "@stephenhay" from 
+#' <https://mathiasbynens.be/demo/url-regex> because it's the shortest regex that 
+#' matches every CRAN mirror at <https://cran.r-project.org/mirrors.html>.
+#'
+#' @param string (Character) A URL to check.
+#'
+#' @return A logical value, `TRUE` if the URL is valid, `FALSE` if otherwise.
+#'
+#' @examples
+#' \dontrun{
+#' is_valid_url("http://rstudio.com")
+#' }
+#' 
+#' @md
+is_valid_url <- function(string) {
+    any(grepl("(https?|ftp)://[^\\s/$.?#].[^\\s]*", string))
+}
+
+
+
+# Runs with devtools::release() ------------------------------------------------
+
 release_questions <- function() {
     c(
         "Have you run devtools::test()?"

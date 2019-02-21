@@ -1,3 +1,57 @@
+# librarian 1.6.0 (2019-02-19)
+
+- MOD - `biocLite` has been replaced with `BiocManager` for installing BioConductor packages. `BiocManager` has been added as a dependency.
+- FIX - Various spelling errors in preparation for CRAN submission.
+- ADD - Vignette for CRAN
+- ADD - `browse_cran()` for searching CRAN package titles and descriptions by keyword or regular expression.
+
+
+
+# librarian 1.5.5 (2019-02-18)
+
+- FIX - `nse_dots()` used to insert spaces in names that included `-` because it was formatting them nicely as if they were expressions with the minus operator. The function now removes any spaces that were created in the process of converting from a symbol to a string. Closes [#13](https://github.com/DesiQuintans/librarian/issues/13).
+- MOD - `remotes` replaces `devtools`. Closes [#11](https://github.com/DesiQuintans/librarian/issues/11).
+- REM - The `backports` package is no longer needed.
+
+
+# librarian 1.5.4 (2019-02-15)
+
+- FIX - The regular expression used in `librarian:::check_installed()` failed if the package name had a `.` inside it, so those packages were installable but not attachable with _librarian_. Closes [#12](https://github.com/DesiQuintans/librarian/issues/12).
+
+
+
+# librarian 1.5.3 (2019-01-24)
+
+- MOD - Less alarming and more informative message (not a warning) for when the `cran_repo` argument in `shelf()` contains the default R value `@CRAN@`. Closes [Issue #10](https://github.com/DesiQuintans/librarian/issues/10). Thanks, Jim Hunter!
+
+
+# librarian 1.5.2 (2018-11-19)
+
+- FIX - The code comment that `lib_startup()` uses to mark the lines it edited previously indicated an old function name.
+
+# librarian 1.5.1 (2018-11-15)
+
+- MOD - `check_installed()` now works much faster, so librarian in general should work much faster because `check_installed()` was called in every function.
+
+# librarian 1.5.0 (2018-11-02)
+
+- ADD - `lib_startup()` lets you set library search paths and packages that will be loaded globally at the start of every R session, or on a per-project basis.
+
+
+# librarian 1.4.0
+
+- ADD - `shelf()` now supports installing Bioconductor packages via `biocLite()`. Bioconductor's `Biobase` package needs to be installed before *librarian* will attempt to install Bioconductor packages.
+
+# librarian 1.3.2
+
+- REVERT - R dependency back to => 3.4.0.
+
+# librarian 1.3.1
+
+- FIX - librarian was written for R 3.5.0 but only asked for 3.4.0 as a dependency. The R dependency is now 3.5.0.
+- MOD - I have added a dependency for `backports` so that users of R < 3.5.0 do not have to update their R installation for only one important function that librarian needs (`...length()`). Closes issue #4.
+- FIX - Sometimes the CRAN URL check would return a vector of length >1, raising a warning message.
+
 # librarian 1.3.0
 
 - ADD - `lib_paths()` is a wrapper for `.libPaths()` with folder creation built-in. It

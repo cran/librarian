@@ -1,7 +1,7 @@
 # Package management
 
 
-#' Attach packages to the search path, installing them from CRAN or GitHub if needed
+#' Attach packages to the search path, installing them from CRAN, GitHub, or Bioconductor if needed
 #'
 #' @param ... (Names) Packages as bare names. If the package is from GitHub,
 #'    include both the username and package name as UserName/package (see examples).
@@ -20,6 +20,8 @@
 #' @param cran_repo (Character) In RStudio, a default CRAN repo can be set via 
 #'    _Options > Packages > Default CRAN Mirror_). Otherwise, provide the URL to CRAN or 
 #'    one of its mirrors. If an invalid URL is given, defaults to https://cran.r-project.org.
+#' @param bioc_repo (Character) If you use Bioconductor, you can set the repo URLs for it here.
+#'    Defaults to Bioconductor's defaults (view them with `BiocInstaller::biocinstallRepos()`).
 #'
 #' @details  
 #' You may choose to organise your library into folders to hold packages for different 
@@ -54,7 +56,13 @@
 #' }
 #' 
 #' @md
-shelf <- function(..., lib = lib_paths(), update_all = FALSE, quiet = FALSE, ask = TRUE, cran_repo = getOption("repos")) {
+shelf <- function(..., lib = lib_paths(), update_all = FALSE, quiet = FALSE, ask = TRUE, 
+                  cran_repo = getOption("repos"), bioc_repo = character()) {
+    if (is_dots_empty(...) == TRUE) {
+        # Errors should not be 'quiet'-able.
+        stop("No packages were chosen for attaching.")
+    }
+    
     # install_github() lacks a `lib` argument and always installs to the first element 
     # in .libPaths(). The install location must therefore be controlled by adding new 
     # folders to the front of .libPaths(). lib_paths() is a wrapper that also includes
@@ -66,29 +74,35 @@ shelf <- function(..., lib = lib_paths(), update_all = FALSE, quiet = FALSE, ask
     # in R.exe running in the shell, I get the named vector c("CRAN" = "@CRAN@"), which is
     # probably what was causing the error. To catch this, I'll test whether cran_repo is 
     # a URL.
-    
-    # Regex is "@stephenhay" from https://mathiasbynens.be/demo/url-regex because it's the 
-    # shortest regex that matches every CRAN mirror at https://cran.r-project.org/mirrors.html
-    cran_repo_is_url <- grepl("(https?|ftp)://[^\\s/$.?#].[^\\s]*", cran_repo)
-    
-    if (cran_repo_is_url == FALSE) {
+
+    if (is_valid_url(cran_repo) == FALSE) {
         if (quiet == FALSE) {
-            warning("cran_repo = '", as.character(cran_repo), "' is not a valid URL. 
-                    Defaulting to cran_repo = 'https://cran.r-project.org'.")
+            if (cran_repo == "@CRAN@") {
+                # Special case for R's default CRAN placeholder value.
+                # See issue #10: https://github.com/DesiQuintans/librarian/issues/10
+                message("The 'cran_repo' argument in shelf() was not set, so it will \n",
+                        "use cran_repo = 'https://cran.r-project.org' by default.\n\n",
+                        "To avoid this message, set the 'cran_repo' argument to a\n",
+                        "CRAN mirror URL (see https://cran.r-project.org/mirrors.html)\n", 
+                        "or set 'quiet = TRUE'.")
+            } else {
+                warning("This is not a valid URL: cran_repo = '", as.character(cran_repo), "'\n", 
+                        "Defaulting to cran_repo = 'https://cran.r-project.org'.")
+            }
         }
         
         # Default to the official CRAN site because it's future-proof.
         cran_repo <- "https://cran.r-project.org"
     }
     
-    # 1. Get dots (which contains the requested package names)
+    # 1. Get dots (which contains the requested package names).
     packages <- nse_dots(..., keep_user = TRUE)
 
     # 2. Separate the GitHub packages from the CRAN ones. They'll contain a forward-slash.
     github_pkgs <- grep("^.*?/.*?$", packages, value = TRUE)
     github_bare_pkgs <- sub(".*?/", "", github_pkgs)
     
-    cran_pkgs <- packages[!(packages %in% github_pkgs)]
+    cran_pkgs <- packages[!(packages %in% github_pkgs)]  # This may also contain Bioconductor pkgs.
     all_pkgs <- append(cran_pkgs, github_bare_pkgs)
     
     # 3a. If a package is missing from the library, install it.
@@ -97,28 +111,60 @@ shelf <- function(..., lib = lib_paths(), update_all = FALSE, quiet = FALSE, ask
         cran_missing   <- cran_pkgs
         github_missing <- github_pkgs
     } else {
-        cran_missing   <- cran_pkgs[which(!cran_pkgs %in% check_installed())]
+        cran_missing   <- cran_pkgs[which(!check_installed(cran_pkgs))]
         github_missing <- github_pkgs[which(!check_installed(github_bare_pkgs))]
     }
-
+    
     if (length(cran_missing) > 0) {
-        suppress_lib_message(  # "Installing package into ... (as ‘lib’ is unspecified)"
-            utils::install.packages(cran_missing, quiet = quiet, repos = cran_repo)
+        suppressWarnings(  # Warnings from trying to install non-CRAN packages (i.e. Bioconductor).
+            suppress_lib_message(  # "Installing package into ... (as ‘lib’ is unspecified)"
+                utils::install.packages(cran_missing, quiet = quiet, repos = cran_repo)
+            )
         )
     }
     
     if (length(github_missing) > 0) {
         suppress_lib_message(
-            devtools::install_github(github_missing, quiet = quiet)
+            remotes::install_github(github_missing, quiet = quiet)
         )
     }
-
-    # 4. Find the packages that aren't attached yet.
-    not_attached <- all_pkgs[which(!check_attached(all_pkgs))]
     
-    # 5. Attach those packages.
+    # 4. CRAN packages that failed to install may be Bioconductor packages.
+    cran_still_missing <- cran_missing[which(!check_installed(cran_missing))]
+    
+    if (length(cran_still_missing) > 0 & check_installed("Biobase") == TRUE) {
+        suppressWarnings(
+            # By my understanding, install with `suppressUpdates = TRUE` will
+            # automatically update the requested Bioconductor packages, but will NOT
+            # update all other installed packages too. I tried running it with
+            # `ask = FALSE` and it updated everything in my R installation :/
+            BiocManager::install(cran_still_missing, site_repository = bioc_repo,
+                                 update = FALSE, ask = FALSE, quiet = quiet)
+        )
+    }
+    
+    # 5a. Find the packages that aren't attached yet.
+    # 5b. Omit any packages that failed installation.
+    not_attached <- all_pkgs[which(check_installed(all_pkgs) == TRUE & check_attached(all_pkgs) == FALSE)]
+    failed_install <- all_pkgs[which(!check_installed(all_pkgs))]
+    
+    # 6. Attach those packages.
     if (length(not_attached) > 0) {
+        # Bioconductor packages have SO MANY annoying package startup messages that 
+        # are actually just sent as plain messages. Should I suppress them?
         lapply(not_attached, library, character.only = TRUE, quietly = quiet)
+    }
+    
+    if (length(failed_install) > 0) {
+        warning("\n\n  These packages failed to install and were not attached:\n\n",
+                "    ", paste(failed_install, collapse = ", "), "\n\n",
+                "  Are they Bioconductor packages? If so, please install Bioconductor\n",
+                "  before running librarian::shelf().\n\n",
+                "  Are they from GitHub? Please supply both the GitHub username and\n",
+                "  package name, e.g. DesiQuintans/librarian\n\n",
+                "  Otherwise, check the spelling and capitalisation of the names.\n",
+                "  It's also possible that the packages are someone's private packages\n",
+                "  that are not being shared online.")
     }
     
     return(invisible(check_attached(nse_dots(..., keep_user = FALSE))))
@@ -168,7 +214,7 @@ shelf <- function(..., lib = lib_paths(), update_all = FALSE, quiet = FALSE, ask
 #' 
 #' @md
 unshelf <- function(..., everything = FALSE, also_depends = FALSE, safe = TRUE, quiet = TRUE) {
-    if (...length() == 0 && everything == FALSE) {
+    if (is_dots_empty(...) == TRUE && everything == FALSE) {
         # Errors should not be 'quiet'-able.
         stop("No packages were chosen for detaching. Either provide the names of ", 
              "packages, or set 'everything = TRUE' to detach all non-Base packages.")
@@ -361,4 +407,197 @@ lib_paths <- function(path, make_path = TRUE, ask = TRUE) {
     .libPaths(c(path, .libPaths()))
     
     return(.libPaths())
+}
+
+
+
+#' Set packages and library paths to automatically start-up with R
+#'
+#' This function writes code to a .Rprofile file that R reads at the start of every new 
+#' session.
+#'
+#' @param ... (Names) Packages as bare names. For packages that come from GitHub, you can
+#'    keep the username/package format, or omit the username and provide just the package 
+#'    name. If you leave `...` blank, R will only load its default packages (see Details).
+#' @param lib (Character) The path where packages are installed. Can be an 
+#'     absolute or relative path. If `path` has more than one element, only the first 
+#'     one will be kept. Tilde expansion is performed on the input, but wildcard expansion 
+#'     (globbing) is not. Defaults to the current library search path.
+#' @param global (Logical) If `TRUE`, write these settings to a .Rprofile file in the home
+#'    directory (on Windows, the My Documents folder). If `FALSE`, write them to a 
+#'    .Rprofile file that is in the current directory (i.e. the RStudio project's folder, 
+#'    or the current working directory). See Details for more.
+#'
+#' @details R's startup order is mentioned in `?Startup`, but briefly:
+#'    1. R tries to load the environmental variables file (Renviron.site)
+#'    2. R tries to load the site-wide profile (Rprofile.site)
+#'    3. R tries to load the user profile (.Rprofile), first in the current directory, and 
+#'       then in the user's home directory (on Windows, the My Documents folder). 
+#'       **Only one of these files is sourced into the workspace.**
+#'       
+#'    Omitting `...` makes R load only its default packages. If these are not set in an
+#'    environmental variable (`R_DEFAULT_PACKAGES`), then R will default to loading these 
+#'    packages: datasets, utils, grDevices, graphics, stats, and methods.
+#'
+#' @return A message listing the values that were written to the .Rprofile file.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' lib_startup(librarian)
+#' 
+#' lib_startup(librarian, dplyr, lubridate)
+#' }
+#' 
+#' @md
+lib_startup <- function(..., lib = lib_paths(), global = TRUE) {
+    # 1. Check that the library path folders exist.
+    paths <- lib_paths(lib, make_path = TRUE, ask = TRUE)
+        
+    # 2. Check if dots is empty or not.
+    if (is_dots_empty(...) == TRUE) {
+        packages <- character(0)
+    } else {
+        packages <- nse_dots(..., keep_user = FALSE)
+    }
+
+    # 3. If dots is not empty, check that the packages are all installed.
+    if (length(packages) > 0) {
+        status <- check_installed(packages)
+        
+        if (any(!status)) { # !status so that the failed packages are TRUE.
+            # There was a package that was not installed in the search path.
+            stop("Some requested packages are not installed in the current library path:\n\n  ",
+                 paste(names(status[status == FALSE]), collapse = "  "), "\n\n",
+                 "  Use shelf() to install them, or if they are already installed, use\n", 
+                 "  the 'lib' argument to point to the folder they are installed in.")
+        }
+    }
+    
+    # 4. Reset the defaultPackages option.
+    def_pkgs <- Sys.getenv("R_DEFAULT_PACKAGES")
+    
+    if (nchar(def_pkgs) == 0) {
+        # This environment var is unset, so default to R's list of packages.
+        # See 'defaultPackages' entry in ?getOption for details.
+        def_pkgs <- c("datasets", "utils", "grDevices", "graphics", "stats", "methods")
+    }
+    
+    # 5. Build the lines that are going to be printed to the Rprofile.
+    libr_marker <- "  # Added by librarian::lib_startup()."
+    path_output <- collapse_vec(paths)
+    pkgs_output <- collapse_vec(def_pkgs, packages)
+    
+    path_lines <- paste0('\n.libPaths(c(', 
+                         path_output, 
+                         '))', 
+                         libr_marker)
+    
+    pkgs_lines <- paste0('\noptions(defaultPackages = c(', 
+                         pkgs_output, 
+                         '))', 
+                         libr_marker)
+
+    # 6. Check if the .Rprofile file already exists, and remove Librarian code from it.
+    file <- if (global == TRUE) "~/.Rprofile" else file.path(getwd(), ".Rprofile")
+
+    if (file.exists(file)) {
+        lines <- readLines(file)
+        lines <- lines[grepl(libr_marker, lines, fixed = TRUE) == FALSE]
+    } else {
+        lines <- character(0)
+    }
+
+    # 7. Print the lines to the file
+    cat(lines,      file = file, append = FALSE)  # Replace contents of file first.
+    cat(path_lines, file = file, append = TRUE)
+    cat(pkgs_lines, file = file, append = TRUE)
+    cat("\r\n",     file = file, append = TRUE)   # Terminate the file properly.
+
+    message("Added library paths and startup packages to:\n  ", path.expand(file), "\n\n",
+            "Library paths:\n  ", path_output, "\n\n",
+            "Startup packages:\n  ", pkgs_output)
+}
+
+
+
+#' Search for CRAN packages by keyword/regex
+#'
+#' Inspired by my mysterious inability to remember what the ColorBrewer package is 
+#' actually called.
+#'
+#' @param query (Character) A string to `grep()` for.
+#' @param fuzzy (Logical) If `TRUE`, enables fuzzy orderless matching. Every word in
+#'   `query` (i.e. every group of characters separated with a space) will be wrapped
+#'   with a lookaround `(?=*KEYWORD)`. This will match keywords regardless
+#'   of the order in which those words appear.
+#' @param echo (Logical) If `TRUE`, print the results to the console.
+#' @param ignore.case (Logical) If `TRUE`, ignore upper/lowercase differences while
+#'   searching.
+#'
+#' @return Invisibly returns a dataframe of the packages that matched the query 
+#'   together with their descriptions.
+#' @export
+#'
+#' @examples
+#' \donttest{
+#' browse_cran("colorbrewer")
+#' 
+#' #> RColorBrewer 
+#' #>     Provides color schemes for maps (and other graphics) designed by Cynthia 
+#' #>     Brewer as described at http://colorbrewer2.org 
+#' #> 
+#' #> Redmonder 
+#' #>     Provide color schemes for maps (and other graphics) based on the color 
+#' #>     palettes of several Microsoft(r) products. Forked from 'RColorBrewer' 
+#' #>     v1.1-2. 
+#' }
+#' 
+#' @md
+browse_cran <- function(query, fuzzy = FALSE, echo = TRUE, ignore.case = TRUE) {
+    # Downloading the CRAN package list is slow (10 seconds for me), so I only want
+    # to do it once per session.
+    
+    temp_crandb_file <- file.path(tempdir(), "temp_cran_db.rds")
+    
+    if (!file.exists(temp_crandb_file)) {
+        raw <- tools::CRAN_package_db()[c("Package", "Description")]
+        raw["Description"] <- gsub("\\s+", " ", raw[["Description"]])
+        raw["Description"] <- gsub("\\s?<.*>", "", raw[["Description"]])
+        
+        cran_db <- data.frame(Package = raw[["Package"]],
+                              Description = raw[["Description"]],
+                              Haystack = paste(raw[["Package"]], raw[["Description"]]),
+                              stringsAsFactors = FALSE)
+        
+        saveRDS(cran_db, temp_crandb_file)
+    } else {
+        cran_db <- readRDS(temp_crandb_file)
+    }
+    
+    # Matching unordered terms with PERL regex is super slow, so it's opt-in.
+    
+    if (fuzzy == TRUE) {
+        query <- fuzzy_needle(query)
+    }
+    
+    matching_rows <- grep(query, cran_db[["Haystack"]], 
+                          ignore.case = ignore.case, perl = TRUE)
+    
+    if (length(matching_rows) == 0) {
+        message("\nNo CRAN packages matched query: ", query, "\n")
+        return(invisible(data.frame()))
+    }
+    
+    # Remember to omit the "haystack" col.
+    matches <- cran_db[matching_rows, c("Package", "Description")]
+    
+    if (echo == TRUE) {
+        for (i in 1:nrow(matches)) {
+            cat(matches[[i, "Package"]], "\n")
+            cat(wrap_long(matches[[i, "Description"]]), "\n\n")
+        }
+    }
+    
+    return(invisible(matches))
 }
