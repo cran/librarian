@@ -1,8 +1,8 @@
 Package: librarian
 Title: Install, Update, Load Packages from CRAN, 'GitHub', and
         'Bioconductor' in One Step
-Version: 1.7.0
-Date: 2019-03-13
+Version: 1.8.1
+Date: 2021-07-12
 Authors@R: person("Desi", "Quintans", email = "science@desiquintans.com",
                   role = c("aut", "cre"))
 Description: Automatically install, update, and load 'CRAN', 'GitHub', and 'Bioconductor' 
@@ -14,14 +14,13 @@ Depends: R (>= 3.5.0)
 License: GPL-3
 Encoding: UTF-8
 Imports: BiocManager, remotes, tools, utils
-LazyData: true
-RoxygenNote: 6.1.1
+RoxygenNote: 7.1.1
 Suggests: testthat, knitr, rmarkdown
 Language: en-GB
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2019-03-13 10:59:11 UTC; Desi
+Packaged: 2021-07-12 11:10:54 UTC; me
 Author: Desi Quintans [aut, cre]
 Maintainer: Desi Quintans <science@desiquintans.com>
 Repository: CRAN
-Date/Publication: 2019-03-13 19:40:03 UTC
+Date/Publication: 2021-07-12 11:40:02 UTC

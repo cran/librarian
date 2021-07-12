@@ -1,3 +1,32 @@
+# librarian 1.8.1 (2021-07-12)
+
+- FIX - There was an issue where brand new GitHub packages wouldn't be installed unless `update_all = TRUE`. Closes #27.
+- FIX - Changed link to CONDUCT.md in README to an absolute link for CRAN resubmission.
+- FIX - Removed `LazyData` from DESCRIPTION for CRAN resubmission.
+- FIX - Cached data is no longer used when checking if a package is installed.
+
+
+# librarian 1.8.0 (2021-06-29)
+
+- ADD - `stock()` lets you install packages from a list without attaching them, unlike `shelf()` which does both. Closes #26.
+- MOD - `shelf()` was refactored to pull package installation into the new `stock()` function.
+- FIX - An internal QA test was failing because the dependency list of the package `testthat` has changed since the last `librarian` version c. 2019. Updated the list.
+- FIX - Results of `stock()` and `shelf()` are now reported in the same order as the user gave them in `...`.
+- MOD - `update_all = TRUE` in `shelf()` and `stock()` now force reinstallation of a GitHub package even if the remote package's SHA1 matches the installed version. The reasoning is a) that 'forcing an update' should actually perform an update even if the files are identical, and b) in the event that some of the user's files have been changed, the stored SHA1 will not reflect this. Closes #24.
+- FIX - The "paths '-1' are not writeable" error was apparently fixed in v1.7.2, but that version was never uploaded to CRAN. Uploading it to CRAN should hopefully solve this once and for all. Closes #21. Closes #23.
+
+
+
+# librarian 1.7.2 (2019-03-11)
+
+- FIX - `lib_paths()` doesn't call itself as an argument in `shelf()`. Thanks, [Miles Smith](https://github.com/milescsmith/)!
+- FIX - `shelf()` now exits as soon as possible by trying to attach all packages right at the start of the function. Previously, package attachment was done only at the end, after all the other checks were done. If you set `update_all = TRUE` then the function will run package installation first and package attachment second. Closes #19.
+- FIX - `unshelf()` only acts on dependencies that are actually attached. It previously also acted on packages that were only namespaced but not attached. Closes #20.
+- FIX - `make_dirs()` no longer validates filenames that contain dots as if they were filenames, e.g. `C:/MyPath/R/3.5`.
+- FIX - `lib_paths()` shows names of non-writeable paths, instead of the result `-1`.
+
+
+
 # librarian 1.7.0 (2019-03-13)
 
 - FIX - You can now detach everything except R's default packages by using `safe = FALSE` in `unshelf()`. If `safe = TRUE`, the packages that you've set as default ones in your .RProfile (via `lib_startup()` for example) will not be detached. Fixes #17.
@@ -7,7 +36,7 @@
    2. A comma-separated list of strings. `shelf("package", "name", "here")`
    3. A comma-separated list of names and strings. `shelf("package", name, "here")`
    4. A character vector of package names, as long as it is the only item passed in `...`. `shelf(c("package", "name", "here"))`
-   - These changes were made to accomodate the advanced input methods of `remotes`. They also make it possible to use these functions inside scripts, like passing package lists around.
+   - These changes were made to accommodate the advanced input methods of `remotes`. They also make it possible to use these functions inside scripts, like passing package lists around.
 - ADD - Many new unit tests, with more stringent testing methods.
 - MOD - Major refactoring. The biggest change is that user-facing stuff like messages have been extracted from the functions so that the logic of the function is easier to maintain.
 

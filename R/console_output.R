@@ -137,14 +137,19 @@ tell_user <- function(message, ...) {
                    "This is not a valid URL: cran_repo = %s\n
                    Defaulting to cran_repo = 'https://cran.r-project.org'.",
                
-               "some packages failed to install" =
-                   "These packages failed to install and were not attached:\n\n
+               "some packages failed to stock" =
+                   "These packages failed to install:\n\n
                    %s \n\n
                    Check the spelling and capitalisation of the names.\n\n
                    Are they Bioconductor packages? If so, please install 
-                   Bioconductor before running librarian::shelf().\n\n
-                   Are they from GitHub? Please supply both the GitHub username 
-                   and package name, e.g. DesiQuintans/librarian",
+                   Bioconductor (BiocManager and BiocBase).\n\n
+                   Are they from GitHub? If so, please supply both the GitHub 
+                   username and package name, e.g. DesiQuintans/librarian",
+               
+               "some packages failed to shelf" =
+                   "These packages are not installed, so they were not attached:\n\n
+                   %s \n\n
+                   Did they fail to install? Are they spelled correctly?",
                
                "nothing to unshelf" =
                    "No packages were chosen for detaching. Either provide the 
@@ -159,6 +164,11 @@ tell_user <- function(message, ...) {
                
                "nothing to detach" = 
                    "The packages were not attached, so can't be detached.",
+               
+               "these packages will be installed" = 
+                   "These packages will be installed:\n\n
+                   %s \n\n
+                   It may take some time.\n\n",
                
                stop("Invalid message name.")
         )
